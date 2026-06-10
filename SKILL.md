@@ -1,11 +1,11 @@
 ---
 name: metab-r-analysis
-description: R 代谢组学一键分析。输入丰度矩阵（tab或csv），自动运行 PCA → OPLS-DA → 火山图 → 聚类热图全套分析。触发词："使用r"、"r分析"、"代谢组r"、"重新分析"、"跑一下r"。
+description: R 代谢组学一键分析。输入丰度矩阵，自动运行 PCA → OPLS-DA → 火山图 → 聚类热图 → KEGG 通路富集全套分析。触发词："使用r"、"r分析"、"代谢组r"、"重新分析"、"跑r"。
 ---
 
 # 代谢组学 R 分析流水线
 
-一键运行 PCA、OPLS-DA、火山图、聚类热图，输出表格 + PDF。
+一键运行 PCA、OPLS-DA、火山图、聚类热图、KEGG 通路富集，输出表格 + PDF。
 
 ## 触发条件
 
@@ -44,14 +44,16 @@ R 4.4.1 安装在 `D:/RRR/R/R-4.4.1/`。调用方式：
 
 按顺序运行以下 4 个脚本，每一步完成后检查是否有错误再继续：
 
-| 顺序 | 脚本 | 功能 | 输出 |
-|---|---|---|---|
-| 1 | `02_OPLSDA_analysis.R` | OPLS-DA 建模 + t检验 + 差异筛选 | `OPLSDA_Diff_Results_*.csv` |
-| 2 | `01_PCA_analysis.R` | PCA 降维（分组 + 三组合并） | `01_PCA_*.pdf` |
-| 3 | `03_Volcano_plot.R` | 火山图（依赖 Step1 的 CSV） | `02_Volcano_*.pdf` |
-| 4 | `04_Heatmap_plot.R` | 差异代谢物聚类热图（依赖 Step1） | `03_Heatmap_*.pdf` |
+| 顺序 | 脚本 | 功能 | 输出 | 依赖 |
+|---|---|---|---|---|
+| 1 | `02_OPLSDA_analysis.R` | OPLS-DA 建模 + t检验 + 差异筛选 | `OPLSDA_Diff_Results_*.csv` | — |
+| 2 | `01_PCA_analysis.R` | PCA 降维（分组 + 三组合并） | `01_PCA_*.pdf` | — |
+| 3 | `03_Volcano_plot.R` | 火山图 | `02_Volcano_*.pdf` | Step1 |
+| 4 | `04_Heatmap_plot.R` | 差异代谢物聚类热图 | `03_Heatmap_*.pdf` | Step1 |
+| 5 | `05_KEGG_targets.R` | 提取显著差异代谢物 KEGG ID | `04_KEGG_Target_*.csv` | Step1 |
+| 6 | `06_KEGG_bubble.R` | KEGG 通路富集 + Top10 气泡图 | `05_KEGG_*.csv`, `05_KEGG_Bubble_*.pdf` | Step5 |
 
-> Step 1 必须先跑因为产生后续步骤依赖的 CSV。Step 2-4 可并行。
+> Step 1 必须先跑。Step 2-4 可并行。Step 5-6 串行（5→6）。Step 6 需联网获取 KEGG 数据库。
 
 ### Step 3 — 报告结果
 
@@ -85,3 +87,22 @@ R 4.4.1 安装在 `D:/RRR/R/R-4.4.1/`。调用方式：
 3. **PCA 零方差**：`prcomp` 报错 → `apply(x, 1, var) > 1e-10` 过滤
 4. **椭圆点数不足**：减少 `stat_ellipse` 或忽略 warning
 5. **R 未安装** → 提示用户安装或自行安装（优先用已有的 `D:/RRR/R/R-4.4.1/`）
+
+## KEGG 通路富集（Step 5-6）
+
+Step 6 需要联网获取 KEGG 数据库。**物种代码**可通过命令行参数传入：
+
+```bash
+Rscript 06_KEGG_bubble.R <数据目录> [organism_code]
+```
+
+默认物种为 **dosa**（水稻 Oryza sativa japonica）。常见物种代码：
+
+| 代码 | 物种 |
+|---|---|
+| `dosa` | 水稻 (Oryza sativa japonica) |
+| `hsa` | 人类 (Homo sapiens) |
+| `mmu` | 小鼠 (Mus musculus) |
+| `ath` | 拟南芥 (Arabidopsis thaliana) |
+
+气泡图取 p.adjust 最小的 Top 10 通路，全量结果保存为 CSV。不设 p.adjust 硬阈值，保留所有富集通路供查看。
