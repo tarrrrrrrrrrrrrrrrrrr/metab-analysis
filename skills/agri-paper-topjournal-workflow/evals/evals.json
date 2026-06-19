@@ -1,0 +1,23 @@
+{
+  "skill_name": "agri-paper-topjournal-workflow",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Audit this agricultural Excel workbook before reanalysis. Confirm factors, three replicates, missing variables and pseudoreplication risks. Do not modify source files.",
+      "expected_output": "A structured data audit and analysis-readiness report.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Redraw the manuscript figures in Python using the supplied palette, Times New Roman, black-edged marks, real error bars and abc significance letters; export separate panels and combined PDF/600-dpi PNG files.",
+      "expected_output": "Journal-ready figures plus figure QA reports without invented statistics.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Audit the manuscript, figures, supplement, cover letter, data and code for immediate submission to the named journal. Remove stale-journal files from the clean package but do not alter sources.",
+      "expected_output": "A clean submission package, manifest and explicit remaining-risk report.",
+      "files": []
+    }
+  ]
+}
