@@ -1,6 +1,6 @@
 ---
 name: metab-analysis
-description: Use when the user asks for metabolomics analysis, differential metabolite analysis, KEGG enrichment, or transcriptome-metabolome joint analysis, especially Chinese prompts such as 代谢组分析、代谢物差异、联合分析、转录组代谢组相关网络、基因-代谢物网络、Cytoscape节点边表、R≥0.9网络图、论文组学图.
+description: Use when the user asks for metabolomics analysis, differential metabolite analysis, KEGG enrichment, or transcriptome-metabolome joint analysis, including prompts about daixiezufenxi, daixiewu chayi, lianhe fenxi, gene-metabolite networks, Cytoscape node/edge tables, R>=0.9 correlation networks, or paper-ready omics figures.
 ---
 
 # Metabolomics And Multi-Omics Analysis
@@ -119,4 +119,3 @@ Use `SmartLeader` for the recommended version. `NoLeader` is useful when labels 
 | PowerShell expands `$Weight` or `$Target` inside inline R | Put verification code in a `.R` file or quote carefully |
 | PDF export fails with Cairo stream error | The existing PDF may be open; export with a new suffix |
 | Too many label leader lines | Use `SmartLeader` or `NoLeader` mode in the plotting script |
-
