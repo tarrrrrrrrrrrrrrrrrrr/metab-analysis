@@ -1,110 +1,122 @@
 ---
 name: metab-analysis
-description: 代谢组学差异分析全套流程。输入丰度矩阵数据目录，自动运行 PCA → OPLS-DA → 火山图 → 聚类热图 → KEGG 通路富集。触发词：分析代谢组、代谢组分析、代谢组学分析、代谢组差异、代谢物差异、代谢组数据处理、代谢组重新分析、跑代谢组、做代谢组。
+description: Use when the user asks for metabolomics analysis, differential metabolite analysis, KEGG enrichment, or transcriptome-metabolome joint analysis, especially Chinese prompts such as 代谢组分析、代谢物差异、联合分析、转录组代谢组相关网络、基因-代谢物网络、Cytoscape节点边表、R≥0.9网络图、论文组学图.
 ---
 
-# 代谢组学差异分析
+# Metabolomics And Multi-Omics Analysis
 
-一键运行 PCA、OPLS-DA、火山图、聚类热图、KEGG 通路富集全套分析，输出表格 + PDF。
+This skill supports two related workflows:
 
-## 触发条件
+1. **Metabolomics differential analysis** from an abundance matrix: PCA, OPLS-DA, differential metabolites, volcano plots, heatmaps, KEGG target extraction and KEGG bubble plots.
+2. **Transcriptome-metabolome joint analysis** from existing DEG, metabolite matrix and RNA matrix files: Pearson correlation network, evidence tables, Cytoscape node/edge tables and a publication-style focused network figure.
 
-用户说"分析代谢组"、"代谢组分析"、"代谢组学分析"、"代谢组差异分析"、"代谢物差异"、"代谢组数据处理"、"代谢组重新分析"、"跑代谢组"、"做代谢组"等，且指明了数据目录时自动触发。
+Use it for paper-oriented omics workflows where the user expects reusable R code, auditable CSV outputs and figure files.
 
-> 如果你的数据之前已跑过代谢组分析流程（如 MetaboAnalyst、XCMS、Biotree 等），想用 R 重新分析，同样触发本技能。
+## Runtime
 
-## 前置：找到 R
+Prefer the user's local R if present:
 
-R 4.4.1 安装在 `D:/RRR/R/R-4.4.1/`。调用方式：
-
-```bash
-"D:/RRR/R/R-4.4.1/bin/Rscript.exe" -e "source('<script>.R')"
+```powershell
+D:\RRR\R\R-4.4.1\bin\x64\Rscript.exe
 ```
 
-或在 R 脚本中首行写入 `setwd("<数据目录>")` 后直接执行：
+If that path is absent, resolve R from a shortcut or `Get-Command Rscript`. Do not silently switch to another language for figure generation when the user requested R.
 
-```bash
-"D:/RRR/R/R-4.4.1/bin/Rscript.exe" "<脚本路径>"
+## Workflow A: Metabolomics Differential Analysis
+
+Use this when the user has a metabolite abundance matrix such as `metab_abund_named.txt`.
+
+Run the existing scripts in order:
+
+| Step | Script | Purpose | Main outputs |
+|---|---|---|---|
+| 1 | `02_OPLSDA_analysis.R` | OPLS-DA, VIP, t-test and differential metabolite screening | `OPLSDA_Diff_Results_*.csv` |
+| 2 | `01_PCA_analysis.R` | PCA and QC visualization | `01_PCA_*.pdf` |
+| 3 | `03_Volcano_plot.R` | Volcano plots | `02_Volcano_*.pdf` |
+| 4 | `04_Heatmap_plot.R` | Differential metabolite heatmaps | `03_Heatmap_*.pdf` |
+| 5 | `05_KEGG_targets.R` | Extract significant KEGG compounds | `04_KEGG_Target_*.csv` |
+| 6 | `06_KEGG_bubble.R` | KEGG enrichment and bubble plots | `05_KEGG_*.csv`, `05_KEGG_Bubble_*.pdf` |
+
+One-command entry:
+
+```powershell
+& "D:\RRR\R\R-4.4.1\bin\x64\Rscript.exe" "scripts\run_all.R" "C:\path\to\data" dosa
 ```
 
-如果你的 R 路径不同，用 `where Rscript` 或搜索 `R-4*` 目录找到它，然后以此为准。
+Default organism is `dosa` for rice. Change it when the manuscript species is not rice.
 
-## 分析流程
+## Workflow B: Transcriptome-Metabolome Joint Network
 
-### Step 0 — 确认输入
+Use this when the user has already produced DEG and metabolite results and asks to redo a joint analysis, replace old paths/files, use `R=0.9`, create a core gene-metabolite network or prepare a paper figure.
 
-向用户确认：
-- **数据目录**：包含 `metab_abund_named.txt`（或名称为 `metab_abund.txt` 等 tab 分隔丰度矩阵）的目录路径
-- **对比组**：默认自动提取列名前缀（如 `WT` vs `KO_2`、`KO_6`），若用户指定则使用用户指定
-- **输出目录**：默认同数据目录
+### Expected Input Files
 
-### Step 1 — 复制脚本到数据目录
+The input directory should contain these files, or equivalent files with the same columns:
 
-将 `scripts/` 下的 4 个 R 脚本复制到目标数据目录（或用 `setwd()` 直接指向数据目录，读脚本时加绝对路径）。
-
-### Step 2 — 依次运行
-
-按顺序运行以下 4 个脚本，每一步完成后检查是否有错误再继续：
-
-| 顺序 | 脚本 | 功能 | 输出 | 依赖 |
-|---|---|---|---|---|
-| 1 | `02_OPLSDA_analysis.R` | OPLS-DA 建模 + t检验 + 差异筛选 | `OPLSDA_Diff_Results_*.csv` | — |
-| 2 | `01_PCA_analysis.R` | PCA 降维（分组 + 三组合并） | `01_PCA_*.pdf` | — |
-| 3 | `03_Volcano_plot.R` | 火山图 | `02_Volcano_*.pdf` | Step1 |
-| 4 | `04_Heatmap_plot.R` | 差异代谢物聚类热图 | `03_Heatmap_*.pdf` | Step1 |
-| 5 | `05_KEGG_targets.R` | 提取显著差异代谢物 KEGG ID | `04_KEGG_Target_*.csv` | Step1 |
-| 6 | `06_KEGG_bubble.R` | KEGG 通路富集 + Top10 气泡图 | `05_KEGG_*.csv`, `05_KEGG_Bubble_*.pdf` | Step5 |
-
-> Step 1 必须先跑。Step 2-4 可并行。Step 5-6 串行（5→6）。Step 6 需联网获取 KEGG 数据库。
-
-### Step 3 — 报告结果
-
-输出关键数字：每个对比组的差异代谢物数量（上调/下调）、模型 Q²，并列出生成的文件。
-
-## 脚本适配规则
-
-当数据格式与原脚本假设不一致时，按以下规则适配：
-
-### 列名识别
-- 对照组：`WT`、`CK`、`Control`、`NC`
-- 处理组：`KO_`、`T`（如 `T1`、`T2`）、`Treat`
-- QC：`QC`
-- 列名模式：`<组名>_<编号>`（如 `WT_1`、`KO_2_3`）
-
-### 数据格式
-- **tab 分隔** → `read.table(..., sep="\t")`
-- **csv 逗号分隔** → `read.csv(...)`
-- 第 1 列：代谢物 ID（行名）
-- 其余列：样本丰度值
-
-### 关键阈值
-- FC cutoff：1.5 倍（即 `log10(1.5) ≈ 0.176`）
-- P-value cutoff：0.05
-- VIP cutoff：1.0
-- OPLS-DA：predI=1, orthoI=1, permI=200
-
-### 常见问题处理
-1. **`comment.char` 问题**：SMILES 中 `#` 被误作注释 → 读文件时加 `comment.char = ""`
-2. **VIP 向量长度不匹配**：`getVipVn()` 排除近零方差变量 → 用 `NA` 填充缺失项再替换为 0
-3. **PCA 零方差**：`prcomp` 报错 → `apply(x, 1, var) > 1e-10` 过滤
-4. **椭圆点数不足**：减少 `stat_ellipse` 或忽略 warning
-5. **R 未安装** → 提示用户安装或自行安装（优先用已有的 `D:/RRR/R/R-4.4.1/`）
-
-## KEGG 通路富集（Step 5-6）
-
-Step 6 需要联网获取 KEGG 数据库。**物种代码**可通过命令行参数传入：
-
-```bash
-Rscript 06_KEGG_bubble.R <数据目录> [organism_code]
-```
-
-默认物种为 **dosa**（水稻 Oryza sativa japonica）。常见物种代码：
-
-| 代码 | 物种 |
+| File | Required columns |
 |---|---|
-| `dosa` | 水稻 (Oryza sativa japonica) |
-| `hsa` | 人类 (Homo sapiens) |
-| `mmu` | 小鼠 (Mus musculus) |
-| `ath` | 拟南芥 (Arabidopsis thaliana) |
+| `Final_Scaled_RNA_Matrix_Seedling_DXH.csv` | first column gene id, then sample columns such as `CK.1`, `CK.2`, `CK.3`, `T1.1`, `T1.2`, `T1.3` |
+| `DESeq2_T1_vs_CK_Significant_DEGs.csv` | `Gene_ID`, `log2FoldChange`, `pvalue`, `padj`, `baseMean` |
+| `DEMs_Matrix_Seedling_DXH_Final.csv` | `metab_id`, `Metabolite`, sample columns, `Log2FC_T1_vs_CK`, `Pval_T1_vs_CK`, `FDR_T1_vs_CK`, `VIP` |
+| `DX-H_KEGG_Target_Unique_T1_vs_CK.csv` | `Metabolite`, `KEGG_ID`, `log2FC`, `Pvalue`, `VIP`, `Status`, `Mode` |
 
-气泡图取 p.adjust 最小的 Top 10 通路，全量结果保存为 CSV。不设 p.adjust 硬阈值，保留所有富集通路供查看。
+If file names differ, copy or adapt the script arguments rather than editing the source data.
+
+### Reanalysis Command
+
+```powershell
+& "D:\RRR\R\R-4.4.1\bin\x64\Rscript.exe" `
+  "scripts\07_multiomics_network.R" `
+  "C:\path\to\input" `
+  "C:\path\to\output" `
+  0.90
+```
+
+This script:
+
+- aligns shared RNA and metabolite sample columns;
+- uses Pearson correlation across paired samples;
+- filters edges with `abs(R) >= threshold` and `P < 0.05`;
+- joins DEG statistics and metabolite statistics;
+- prefers KEGG target-table `log2FC/Pvalue/VIP` for manuscript evidence when available;
+- exports all correlations, filtered edges, evidence edges, Cytoscape nodes, focused target-axis edges and input matrices.
+
+### Network Figure Command
+
+```powershell
+& "D:\RRR\R\R-4.4.1\bin\x64\Rscript.exe" `
+  "scripts\08_plot_focused_network_old_layout.R" `
+  "C:\path\to\output" `
+  "SmartLeader"
+```
+
+The plotting script follows the old focused-network style:
+
+- `ggraph + tidygraph`;
+- force-directed layout;
+- red/blue edges for positive/negative correlations;
+- gene circles filled by gene log2FC with black outlines;
+- metabolite diamonds in green with black outlines;
+- label leader lines only where `ggrepel` judges they are helpful;
+- PDF, SVG, TIFF and PNG preview exports.
+
+Use `SmartLeader` for the recommended version. `NoLeader` is useful when labels are very close and the user wants no black guide lines.
+
+## Evidence And Writing Rules
+
+- Treat correlation networks as candidate co-variation evidence, not proof of regulation.
+- State the exact sample columns used for correlation. If RNA has 3+3 samples but metabolomics has more replicates, only paired shared sample columns enter the network.
+- Report both threshold and edge count, e.g. `abs(R) >= 0.90, P < 0.05`.
+- Distinguish metabolite `Pvalue + VIP` evidence from strict global FDR evidence.
+- Keep generated CSV edge/node tables alongside figures so the manuscript figure is auditable.
+
+## Common Problems
+
+| Problem | Fix |
+|---|---|
+| Old scripts still contain another project name such as `Spike` or `YT1` | Replace with command-line arguments and current input/output paths |
+| `Rscript` not in PATH | Resolve from `D:\RRR\R\R-4.4.1\bin\x64\Rscript.exe` or the user's R shortcut |
+| PowerShell expands `$Weight` or `$Target` inside inline R | Put verification code in a `.R` file or quote carefully |
+| PDF export fails with Cairo stream error | The existing PDF may be open; export with a new suffix |
+| Too many label leader lines | Use `SmartLeader` or `NoLeader` mode in the plotting script |
+

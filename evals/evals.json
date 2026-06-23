@@ -1,0 +1,23 @@
+{
+  "skill_name": "metab-analysis",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我有一个代谢组丰度矩阵目录，想用R重新跑PCA、OPLS-DA、火山图、热图和KEGG气泡图，默认水稻dosa。",
+      "expected_output": "Agent should use the metabolomics differential workflow, run scripts in the correct order, and report generated CSV/PDF outputs.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "把这个转录组和代谢组联合分析重跑，输入目录里有DESeq2显著基因、Final_Scaled_RNA矩阵、DEMs矩阵和KEGG靶向代谢物表，R阈值用0.9，输出Cytoscape边表节点表。",
+      "expected_output": "Agent should use 07_multiomics_network.R, align shared samples, filter abs(R)>=0.90 and P<0.05, and export evidence/node/edge tables.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "参考老版核心调控网络图布局，只替换真实代谢物和基因，基因圆点加黑边，部分远标签保留黑色引导线。",
+      "expected_output": "Agent should use 08_plot_focused_network_old_layout.R in SmartLeader mode and generate PDF/SVG/TIFF/PNG preview from real edge/node tables.",
+      "files": []
+    }
+  ]
+}
