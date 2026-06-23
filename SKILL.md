@@ -87,20 +87,38 @@ This script:
 & "D:\RRR\R\R-4.4.1\bin\x64\Rscript.exe" `
   "scripts\08_plot_focused_network_old_layout.R" `
   "C:\path\to\output" `
-  "SmartLeader"
+  "Compact"
 ```
 
-The plotting script follows the old focused-network style:
+The plotting script follows the old focused-network style, with the compact adaptive layout as the default for manuscript figures:
 
-- `ggraph + tidygraph`;
-- force-directed layout;
-- red/blue edges for positive/negative correlations;
+- `ggraph + tidygraph`, `layout = "fr"`, high iteration count for stable clusters;
+- red/blue edges for positive/negative correlations, with thin widths by default;
 - gene circles filled by gene log2FC with black outlines;
-- metabolite diamonds in green with black outlines;
-- label leader lines only where `ggrepel` judges they are helpful;
+- target metabolites as dark-green squares or diamonds, depending on the reference style;
+- adaptive node sizes: shared genes are slightly larger, metabolites scale by retained gene count;
+- compact labels: small italic bold labels, short metabolite aliases in the figure, full names retained in CSV;
+- label leader lines only where `ggrepel` judges they are helpful, with thin low-alpha segments;
 - PDF, SVG, TIFF and PNG preview exports.
 
-Use `SmartLeader` for the recommended version. `NoLeader` is useful when labels are very close and the user wants no black guide lines.
+Use `Compact` for the recommended paper-ready version. Use `SmartLeader` only when the user wants the larger earlier layout. Use `NoLeader` when labels are very close and black guide lines should be removed.
+
+### Compact Network Layout Defaults
+
+When adapting an older regulatory-network script such as `17核心老版调控网络图`, keep its `ggraph(layout = "fr")` logic but apply these defaults unless the user explicitly asks otherwise:
+
+| Element | Default |
+|---|---|
+| Edge width | `scale_edge_width_continuous(range = c(0.12, 0.55))` |
+| Edge alpha | about `0.40` |
+| Gene node | circle `shape = 21`, black outline, size about `3.1 + 0.2 * target_count` |
+| Metabolite node | dark-green square `shape = 22`, black outline, size about `4.6 + 0.3 * sqrt(gene_count)` |
+| Node labels | `geom_node_text(repel = TRUE, size = 2.3-2.5, fontface = "bold.italic")` |
+| Leader lines | `segment.size <= 0.15`, `segment.alpha <= 0.55` |
+| Title/subtitle | small; avoid oversized headers on dense networks |
+| Long metabolite names | use short plot labels such as `Cyanidin-3-Gal`, while preserving full names in edge/node tables |
+
+Never duplicate a shared gene just to make clusters prettier. A shared gene should appear once in a true network layout and connect to every retained metabolite. If this creates too many crossings, either keep the compact FR layout or add a separate shared-gene matrix, but do not misrepresent the graph.
 
 ## Evidence And Writing Rules
 
