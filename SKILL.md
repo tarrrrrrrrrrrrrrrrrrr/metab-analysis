@@ -47,95 +47,192 @@ Default organism is `dosa` for rice. Change it when the manuscript species is no
 
 ## Workflow B: Transcriptome-Metabolome Joint Network
 
-Use this when the user has already produced DEG and metabolite results and asks to redo a joint analysis, replace old paths/files, use `R=0.9`, create a core gene-metabolite network or prepare a paper figure.
+Use this when the user has already produced DEG and metabolite results, or has a narrative analysis text (联合分析思路/*.txt) with named metabolites and axes, and asks to build a gene-metabolite correlation network.
 
-### Expected Input Files
+### Complete Step-by-Step SOP
 
-The input directory should contain these files, or equivalent files with the same columns:
+**Do NOT run 07/08 scripts directly.** This workflow requires per-project adaptation. Follow every step:
 
-| File | Required columns |
-|---|---|
-| `Final_Scaled_RNA_Matrix_Seedling_DXH.csv` | first column gene id, then sample columns such as `CK.1`, `CK.2`, `CK.3`, `T1.1`, `T1.2`, `T1.3` |
-| `DESeq2_T1_vs_CK_Significant_DEGs.csv` | `Gene_ID`, `log2FoldChange`, `pvalue`, `padj`, `baseMean` |
-| `DEMs_Matrix_Seedling_DXH_Final.csv` | `metab_id`, `Metabolite`, sample columns, `Log2FC_T1_vs_CK`, `Pval_T1_vs_CK`, `FDR_T1_vs_CK`, `VIP` |
-| `DX-H_KEGG_Target_Unique_T1_vs_CK.csv` | `Metabolite`, `KEGG_ID`, `log2FC`, `Pvalue`, `VIP`, `Status`, `Mode` |
+#### B.0 — Read the narrative file first
 
-If file names differ, copy or adapt the script arguments rather than editing the source data.
+If the user provides a narrative text (联合分析思路/*.txt), parse:
+- Each axis name and its storyline
+- All metabolite names listed under each axis
+- Any hub gene IDs mentioned
 
-### Reanalysis Command
+This becomes the `axis_map` in Step B.3.
 
-```powershell
-& "D:\RRR\R\R-4.4.1\bin\x64\Rscript.exe" `
-  "scripts\07_multiomics_network.R" `
-  "C:\path\to\input" `
-  "C:\path\to\output" `
-  0.90
+#### B.1 — Survey the data directory
+
+```bash
+ls "path/to/data"
 ```
 
-This script:
+Identify these files (names vary by project):
 
-- aligns shared RNA and metabolite sample columns;
-- uses Pearson correlation across paired samples;
-- filters edges with `abs(R) >= threshold` and `P < 0.05`;
-- joins DEG statistics and metabolite statistics;
-- prefers KEGG target-table `log2FC/Pvalue/VIP` for manuscript evidence when available;
-- exports all correlations, filtered edges, evidence edges, Cytoscape nodes, focused target-axis edges and input matrices.
+| Role | Look for | Key columns check |
+|---|---|---|
+| RNA expression matrix | `Final_Scaled_RNA_Matrix_*.csv` | Gene ID col + sample cols (CK.1, CK.2, CK.3, T2.1, T2.2, T2.3) |
+| DEG statistics | `Treat2_Significant_Genes.csv` or `*_Significant_DEGs.csv` | `Gene_ID`, `log2FoldChange`, `pvalue`, `padj` |
+| Metabolite abundance | ⚠️ **ALWAYS use POS_Diff + NEG_Diff full data** (see B.2) | Sample cols + `Log2FC_T2_vs_CK`, `Pval_T2_vs_CK`, `FDR_T2_vs_CK` |
+| KEGG target table | `04_KEGG_Target_Unique_*.csv` | `Metabolite`, `KEGG_ID`, `log2FC`, `Pvalue`, `VIP` |
 
-### Network Figure Command
+**CRITICAL: Check sample column naming.** RNA matrices often use hyphens (`CK-1`, `CK-2`), while metabolomics files use dots (`CK.1`, `CK.2`). Normalize to dots before analysis: `names(rna) <- gsub("-", ".", names(rna), fixed = TRUE)`
 
-```powershell
-& "D:\RRR\R\R-4.4.1\bin\x64\Rscript.exe" `
-  "scripts\08_plot_focused_network_old_layout.R" `
-  "C:\path\to\output" `
-  "Compact"
+Extract exact sample column names with:
+```bash
+head -1 "file.csv" | tr ',' '\n' | grep -E "CK|T[0-9]"
 ```
 
-The plotting script follows the old focused-network style, with the compact adaptive layout as the default for manuscript figures:
+Shared samples are typically 3+3 (e.g. `CK.1, CK.2, CK.3, T2.1, T2.2, T2.3`). Do NOT include extra replicates (CK.4-CK.6, T2.4-T2.6) in the correlation.
 
-- `ggraph + tidygraph`, `layout = "fr"`, high iteration count for stable clusters;
-- red/blue edges for positive/negative correlations, with thin widths by default;
-- gene circles filled by gene log2FC with black outlines;
-- target metabolites as dark-green squares or diamonds, depending on the reference style;
-- adaptive node sizes: shared genes are slightly larger, metabolites scale by retained gene count;
-- compact labels: small italic bold labels, short metabolite aliases in the figure, full names retained in CSV;
-- label leader lines only where `ggrepel` judges they are helpful, with thin low-alpha segments;
-- PDF, SVG, TIFF and PNG preview exports.
+#### B.2 — Build the FULL DEM matrix (MANDATORY)
 
-Use `Compact` for the recommended paper-ready version. Use `SmartLeader` only when the user wants the larger earlier layout. Use `NoLeader` when labels are very close and black guide lines should be removed.
+⚠️ **Never use a pre-filtered "Ready" or "Optimized" DEM file** (e.g. `DEMs_Matrix_*_Ready.csv`, `DEMs_Matrix_*_Optimized.csv`). These are curated subsets (often 35-83 metabolites) and will exclude narrative metabolites that exist in the raw data, causing the network to miss key nodes.
 
-### Compact Network Layout Defaults
+**Always merge the full POS_Diff and NEG_Diff files:**
 
-When adapting an older regulatory-network script such as `17核心老版调控网络图`, keep its `ggraph(layout = "fr")` logic but apply these defaults unless the user explicitly asks otherwise:
+```r
+# Identify the full abundance files — typically named like:
+#   POS_Diff_CK_vs_T2_6.csv, NEG_Diff_CK_vs_T2_6.csv
+# or with project-specific suffixes like _Leaf_SCI.csv
 
-| Element | Default |
-|---|---|
-| Edge width | `scale_edge_width_continuous(range = c(0.12, 0.55))` |
-| Edge alpha | about `0.40` |
-| Gene node | circle `shape = 21`, black outline, size about `3.1 + 0.2 * target_count` |
-| Metabolite node | dark-green square `shape = 22`, black outline, size about `4.6 + 0.3 * sqrt(gene_count)` |
-| Node labels | `geom_node_text(repel = TRUE, size = 2.3-2.5, fontface = "bold.italic")` |
-| Leader lines | `segment.size <= 0.15`, `segment.alpha <= 0.55` |
-| Title/subtitle | small; avoid oversized headers on dense networks |
-| Long metabolite names | use short plot labels such as `Cyanidin-3-Gal`, while preserving full names in edge/node tables |
+col_shared <- c("metab_id", "Metabolite", samples, 
+                "Log2FC_T2_vs_CK", "Pval_T2_vs_CK", "FDR_T2_vs_CK")
 
-Never duplicate a shared gene just to make clusters prettier. A shared gene should appear once in a true network layout and connect to every retained metabolite. If this creates too many crossings, either keep the compact FR layout or add a separate shared-gene matrix, but do not misrepresent the graph.
+load_diff <- function(fname) {
+  df <- read.csv(file.path(input_dir, fname), check.names = FALSE, stringsAsFactors = FALSE)
+  for (mc in setdiff(col_shared, names(df))) df[[mc]] <- NA_real_
+  df %>% select(any_of(col_shared))
+}
 
-When node tables include real-name labels, enforce uniqueness by the displayed gene label, not only by the raw transcript/gene ID. If multiple source IDs map to the same displayed gene name, merge them into one plotted gene node, retain all metabolite edges on that single node, and keep the original IDs in an `Original_Source` column for traceability. This prevents cases such as two `5_8S_rRNA` labels appearing as separate plotted genes.
+pos_dem <- load_diff("POS_Diff_CK_vs_T2_6.csv")
+neg_dem <- load_diff("NEG_Diff_CK_vs_T2_6.csv")
 
-## Evidence And Writing Rules
+dem <- bind_rows(pos_dem, neg_dem) %>%
+  distinct(Metabolite, .keep_all = TRUE)
+```
 
-- Treat correlation networks as candidate co-variation evidence, not proof of regulation.
-- State the exact sample columns used for correlation. If RNA has 3+3 samples but metabolomics has more replicates, only paired shared sample columns enter the network.
-- Report both threshold and edge count, e.g. `abs(R) >= 0.90, P < 0.05`.
+This yields ~1,200 metabolites instead of 35-83.
+
+#### B.3 — Build the axis_map and VERIFY
+
+```r
+axis_map <- tibble::tribble(
+  ~Target,                      ~Narrative_Axis,
+  "Plantamajoside",             "Axis 1: Phenylpropanoid & Lignin",
+  "Eugenyl Acetate",            "Axis 1: Phenylpropanoid & Lignin",
+  "Uric Acid",                  "Axis 2: Glutathione & Redox",
+  # ... every metabolite from the narrative file
+)
+```
+
+**Then verify every metabolite exists in DEM:**
+
+```r
+in_dem <- axis_map$Target %in% dem$Metabolite
+for (i in seq_len(nrow(axis_map))) {
+  cat(sprintf("  %-35s %s  %s\n", axis_map$Target[i], 
+              ifelse(in_dem[i], "✅ IN DEM", "❌ MISSING"), 
+              axis_map$Narrative_Axis[i]))
+}
+```
+
+Report coverage to the user. Metabolites marked ❌ exist in KEGG target table but lack abundance values — they cannot enter the network. Flag them explicitly so the user can adjust the narrative or supplement data.
+
+#### B.4 — Write the adapted 07 script
+
+Write a project-specific `07_multiomics_network_<PROJ>.R` into the output directory. Template:
+
+```r
+# Key parameters to adapt:
+# - input_dir, output_dir
+# - File names (RNA, DEG, POS_Diff, NEG_Diff, KEGG)
+# - Sample vector (check exact names, normalize dots)
+# - axis_map content
+# - prefix for output file names
+# - DEG column mapping (Gene ID vs Gene_ID, etc.)
+
+# After axis_map, log coverage:
+cat("\n=== Axis metabolite coverage ===\n")
+for (i in seq_len(nrow(axis_map))) {
+  cat(sprintf("  %-40s %s  %s\n", axis_map$Target[i], 
+              ifelse(in_dem[i], "✅", "❌"), axis_map$Narrative_Axis[i]))
+}
+
+# After target_edges, log per-axis counts:
+cat(sprintf("\nRNA: %d | DEM: %d | Pairs: %d | |R|>=%.2f: %d | Target: %d\n", ...))
+for (ax in unique(target_edges$Narrative_Axis)) {
+  ae <- filter(target_edges, Narrative_Axis == ax)
+  cat(sprintf("  %s: %d edges (%s)\n", ax, nrow(ae), paste(unique(ae$Target), collapse=", ")))
+}
+```
+
+#### B.5 — Run the 07 script
+
+```bash
+"D:/RRR/R/R-4.4.1/bin/Rscript.exe" "path/to/07_multiomics_network_<PROJ>.R" \
+  "path/to/input" "path/to/output" 0.90
+```
+
+Default threshold: `|R| >= 0.90, P < 0.05`. If user asks for a different threshold, change the last argument (e.g. `0.85`).
+
+#### B.6 — Write and run the 08 network plot script
+
+Write a project-specific `08_plot_focused_network_<PROJ>.R` with:
+
+```r
+# Adapt:
+# - output_dir, prefix
+# - short_label() function to alias long metabolite names
+# - plot title (include project context: T2 vs CK, Root vs Leaf, etc.)
+```
+
+```bash
+"D:/RRR/R/R-4.4.1/bin/Rscript.exe" "path/to/08_plot_focused_network_<PROJ>.R" \
+  "path/to/output" "Compact"
+```
+
+If PDF is locked (cairo error), use a suffix like `_v2` and rename after.
+
+#### B.7 — Clean up
+
+- Delete old/intermediate network outputs (older suffixes, v2, v3)
+- Rename final versions to the standard name (no suffix)
+- Keep the project-specific 07/08 scripts for reproducibility
+
+### Network Figure Defaults
+
+- `ggraph + tidygraph`, `layout = "fr"`, niter=5000, seed=123
+- Edge: `scale_edge_width_continuous(range = c(0.12, 0.55))`, alpha 0.42
+- Gene node: circle `shape = 21`, black stroke 0.24, fill = Gene Log2FC (blue-white-red gradient)
+- Metabolite node: dark-green square `shape = 22`, black stroke 0.32, fill = `#276231`
+- Labels: `geom_node_text(repel = TRUE, size = 2.35, fontface = "bold.italic")`, segment.size = 0.11, segment.alpha = 0.48
+- Output: PDF (cairo_pdf), SVG (svglite), TIFF (ragg 600dpi LZW), PNG preview (ragg 180dpi)
+- Plot size: Compact mode 10×9 inches
+- `Top20 per metabolite` by |R| — keeps the network readable
+
+### Gene Uniqueness
+
+Never duplicate a gene. A shared gene appears once and connects to all its retained metabolites. When node tables have real-name labels, enforce uniqueness by displayed label, not raw ID. Use `GENE::` prefix and `group_by(Source, Target)` to merge duplicates. This prevents cases like two `5_8S_rRNA` labels appearing as separate nodes.
+
+### Evidence And Writing Rules
+
+- Correlation networks are candidate co-variation evidence, not proof of regulation.
+- State exact sample columns used. Use only paired shared columns (3+3, not 3+6).
+- Report both threshold and edge count: `Pearson |R| >= 0.90, P < 0.05, n = 6 samples (df = 4)`.
 - Distinguish metabolite `Pvalue + VIP` evidence from strict global FDR evidence.
-- Keep generated CSV edge/node tables alongside figures so the manuscript figure is auditable.
+- Keep CSV edge/node tables alongside figures for auditability.
 
-## Common Problems
+### Common Problems
 
 | Problem | Fix |
 |---|---|
-| Old scripts still contain another project name such as `Spike` or `YT1` | Replace with command-line arguments and current input/output paths |
-| `Rscript` not in PATH | Resolve from `D:\RRR\R\R-4.4.1\bin\x64\Rscript.exe` or the user's R shortcut |
-| PowerShell expands `$Weight` or `$Target` inside inline R | Put verification code in a `.R` file or quote carefully |
-| PDF export fails with Cairo stream error | The existing PDF may be open; export with a new suffix |
-| Too many label leader lines | Use `SmartLeader` or `NoLeader` mode in the plotting script |
+| Narrative metabolites missing from network | Check DEM source — use POS_Diff + NEG_Diff full, not "Ready" subset |
+| RNA and DEM sample names don't match | Normalize: `names(rna) <- gsub("-", ".", names(rna), fixed = TRUE)` |
+| "Ready" DEM has only 35-83 metabolites | It's a pre-filtered subset; always merge POS_Diff + NEG_Diff |
+| KEGG table has metabolites absent from abundance | Flag as ❌ in axis_map coverage report; can't enter correlation |
+| DEG column "Gene ID" (space) vs "Gene_ID" (underscore) | Rename: `if ("Gene ID" %in% names(deg)) names(deg)[names(deg) == "Gene ID"] <- "Gene_ID"` |
+| PDF export fails: cairo error "writing to output stream" | File is open/locked; use a suffix `_v2` then rename after |
+| `Rscript` not in PATH | Use `D:\RRR\R\R-4.4.1\bin\x64\Rscript.exe` or resolve from shortcut |
+| Only 2-3 axes appear when narrative has 4 | Metabolites for missing axes are in KEGG table only (not DEM); report to user |
