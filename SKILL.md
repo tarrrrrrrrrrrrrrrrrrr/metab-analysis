@@ -120,6 +120,8 @@ When adapting an older regulatory-network script such as `17核心老版调控�
 
 Never duplicate a shared gene just to make clusters prettier. A shared gene should appear once in a true network layout and connect to every retained metabolite. If this creates too many crossings, either keep the compact FR layout or add a separate shared-gene matrix, but do not misrepresent the graph.
 
+When node tables include real-name labels, enforce uniqueness by the displayed gene label, not only by the raw transcript/gene ID. If multiple source IDs map to the same displayed gene name, merge them into one plotted gene node, retain all metabolite edges on that single node, and keep the original IDs in an `Original_Source` column for traceability. This prevents cases such as two `5_8S_rRNA` labels appearing as separate plotted genes.
+
 ## Evidence And Writing Rules
 
 - Treat correlation networks as candidate co-variation evidence, not proof of regulation.

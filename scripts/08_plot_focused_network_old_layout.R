@@ -58,6 +58,29 @@ edges_focused <- edges_raw %>%
   ungroup() %>%
   arrange(Target, desc(Abs_Weight), Pvalue)
 
+node_lookup <- nodes_raw %>%
+  mutate(
+    Node_ID = str_trim(as.character(Node_ID)),
+    Label = ifelse(!is.na(Label) & Label != "" & Label != "<NA>", str_trim(as.character(Label)), Node_ID)
+  ) %>%
+  distinct(Node_ID, .keep_all = TRUE) %>%
+  select(Node_ID, Label)
+
+# A displayed gene must be a single node. Some RNA features have different
+# source IDs but the same real-name label (for example rRNA features), so the
+# graph is canonicalized by the gene label while retaining original IDs.
+edges_focused <- edges_focused %>%
+  left_join(rename(node_lookup, Original_Source = Node_ID, Source_Label = Label), by = c("Source" = "Original_Source")) %>%
+  mutate(
+    Original_Source = Source,
+    Source_Label = ifelse(!is.na(Source_Label) & Source_Label != "" & Source_Label != "<NA>", Source_Label, Source),
+    Source = paste0("GENE::", Source_Label)
+  ) %>%
+  group_by(Source, Target) %>%
+  slice_max(order_by = Abs_Weight, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  arrange(Target, desc(Abs_Weight), Pvalue)
+
 active_ids <- unique(c(edges_focused$Source, edges_focused$Target))
 gene_degree <- edges_focused %>% distinct(Source, Target) %>% count(Source, name = "Gene_Target_Count")
 metab_degree <- edges_focused %>% count(Target, name = "Metab_Gene_Count")
@@ -72,11 +95,16 @@ nodes_focused <- data.frame(Node_ID = active_ids, stringsAsFactors = FALSE) %>%
   left_join(gene_degree, by = c("Node_ID" = "Source")) %>%
   left_join(metab_degree, by = c("Node_ID" = "Target")) %>%
   mutate(
+    Log2FC_Node = if ("Log2FC" %in% names(.)) suppressWarnings(as.numeric(Log2FC)) else NA_real_,
     Node_Type = ifelse(Node_ID %in% edges_focused$Source, "Hub_Gene", "Target_Metabolite"),
-    Label = ifelse(!is.na(Label) & Label != "" & Label != "<NA>", Label, Node_ID),
+    Label = case_when(
+      Node_Type == "Hub_Gene" ~ sub("^GENE::", "", Node_ID),
+      !is.na(Label) & Label != "" & Label != "<NA>" ~ Label,
+      TRUE ~ Node_ID
+    ),
     Plot_Label = ifelse(Node_Type == "Target_Metabolite", short_label(Node_ID), Label),
     Log2FC_Display = case_when(
-      Node_Type == "Hub_Gene" & "Log2FC" %in% names(.) ~ as.numeric(Log2FC),
+      Node_Type == "Hub_Gene" & !is.na(Log2FC_Node) ~ Log2FC_Node,
       Node_Type == "Hub_Gene" ~ as.numeric(Edge_Gene_Log2FC),
       TRUE ~ 0
     ),
